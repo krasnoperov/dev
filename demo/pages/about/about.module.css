@@ -1,0 +1,4 @@
+.about {
+  background: red;
+  /*composes: red from './colors.module.css';*/
+}
