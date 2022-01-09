@@ -3,7 +3,7 @@ import NotFound from './pages/404.tsx'
 import Header from './header.tsx'
 import { VNode } from 'preact'
 
-import './style.css'
+// import './style.css'
 
 const About = lazy(() => import('./pages/about/about.tsx'))
 const Home = lazy(() => import('./pages/home/home.tsx'))

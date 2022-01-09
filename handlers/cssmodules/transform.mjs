@@ -3,9 +3,11 @@ import fs from 'fs'
 import postcss from 'postcss'
 import nesting from 'postcss-nesting'
 import identifierfy from 'identifierfy'
-import collectClasses from '../postcss/collectClasses.mjs'
-import renameClasses from '../postcss/renameClasses.mjs'
-import { namer } from '../utils/namer.mjs'
+import collectClasses from './postcss/collectClasses.mjs'
+import renameClasses from './postcss/renameClasses.mjs'
+import { namer } from './namer.mjs'
+import { contentType } from 'mime-types'
+import process from 'process'
 
 function generateClassName (record, records, imports, classname = []) {
   for (const compose of record.composes) {
@@ -29,7 +31,7 @@ function generateClassName (record, records, imports, classname = []) {
   return classname
 }
 
-const rootDir = process.cwd()
+const resolveDir = process.cwd()
 
 const classnames = {}
 
@@ -70,10 +72,9 @@ const postcssCollectClasses = postcss([
   }),
 ])
 
-const cache = new Map()
+export async function transform (storage, filename) {
 
-// TODO: fix params
-export async function generate (filename, file) {
+  const file = path.join(resolveDir, filename)
   const code = await fs.promises.readFile(file, 'utf8')
 
   // Collect classnames
@@ -100,39 +101,19 @@ export async function generate (filename, file) {
     defaultExport.push(`"${className}":${identifier}`)
   }
 
+  const cssFilename = path.join('/.virtual/', filename.replace(/\.modules?\.css/, '.css'))
+
   const jsContent = [
-    `import __styles from "${filename + '?css'}" assert { type: 'css' };`,
+    `import __styles from "${cssFilename}" assert { type: 'css' };`,
     'document.adoptedStyleSheets = [...document.adoptedStyleSheets, __styles];',
     imports.join('\n'),
     exports.join('\n'),
     `export default {${defaultExport.join(',')}};`,
   ].join('\n')
 
-  cache.set(filename, {
-    contentType: 'application/javascript; charset=utf-8',
-    body: jsContent
-  })
+  storage.set(filename, jsContent, 'application/javascript; charset=utf-8')
 
-  cache.set(filename + '?css', {
-    contentType: 'text/css; charset=utf-8',
-    body: res.css
-  })
+  storage.set(cssFilename, res.css, 'text/css; charset=utf-8')
 
-  cache.set(filename + '.map', {
-    contentType: 'text/sourceMap',
-    body: res.map.toJSON()
-  })
-}
-
-export default async (args) => {
-  const filename = path.join(args.resolveDir, args.path)
-
-  if (cache.has(args.path)) {
-    return cache.get(args.path)
-  }
-
-  await generate(args.path, filename)
-
-  const result = cache.get(args.path)
-  return result
+  storage.set(cssFilename+ '.map', res.css,  'text/sourceMap', res.map.toJSON())
 }

@@ -10,11 +10,12 @@
     "devcert": "1.2.0",
     "identifierfy": "2.0.0",
     "mime-types": "2.1.34",
-    "polka": "0.5.2",
+    "polka": "1.0.0-next.22",
     "postcss": "8.4.5",
     "postcss-nesting": "10.1.1",
     "postcss-selector-parser": "6.0.8",
     "preact": "10.6.4",
-    "preact-iso": "2.3.0"
+    "preact-iso": "2.3.0",
+    "sirv": "2.0.0"
   }
 }
