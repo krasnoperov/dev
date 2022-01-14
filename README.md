@@ -5,14 +5,14 @@ Features in development environment:
  * No bundle: source files are processed on demand, one by one
  * Lazy loaded components with their own styles
  * CSS Modules together with [CSS Modules Scripts](https://web.dev/css-module-scripts/)
- * Server Side Rendering (TBD)
+ * Server Side Rendering
  * Watch mode (TBD)
 
 ## Running Dev Server
 
     $ npm install
     $ npm run dev
-    $ open https://localhost/demo/index.html
+    $ open https://localhost/
 
 ## Notes
 
