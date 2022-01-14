@@ -15,7 +15,6 @@
     "postcss-nesting": "10.1.1",
     "postcss-selector-parser": "6.0.8",
     "preact": "10.6.4",
-    "preact-iso": "2.3.0",
-    "sirv": "2.0.0"
+    "preact-iso": "2.3.0"
   }
 }

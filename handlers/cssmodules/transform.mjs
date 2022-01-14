@@ -1,12 +1,13 @@
 import path from 'path'
 import fs from 'fs'
+import url from 'url'
 import postcss from 'postcss'
 import nesting from 'postcss-nesting'
 import identifierfy from 'identifierfy'
 import collectClasses from './postcss/collectClasses.mjs'
 import renameClasses from './postcss/renameClasses.mjs'
 import { namer } from './namer.mjs'
-import { contentType } from 'mime-types'
+import { fileURLToPath, pathToFileURL, URL } from 'url'
 import process from 'process'
 
 function generateClassName (record, records, imports, classname = []) {
@@ -72,7 +73,11 @@ const postcssCollectClasses = postcss([
   }),
 ])
 
-export async function transform (storage, filename) {
+export async function transform (storage, filename, options) {
+
+  const {
+    loader = false // generate code for ESM loader within node server
+  } = options
 
   const file = path.join(resolveDir, filename)
   const code = await fs.promises.readFile(file, 'utf8')
@@ -93,27 +98,45 @@ export async function transform (storage, filename) {
   const exports = [] // Named exports to support imports
   const defaultExport = [] // Default exports to use in JS code
 
+  const cssFilename = path.join('/.virtual/', filename.replace(/\.modules?\.css/, '.css'))
+
   const records = classnames[file]
   for (const className in records) {
     const identifier = identifierfy(className)
     const value = generateClassName(records[className], records, imports).join('+" "+')
-    exports.push(`export const ${identifier} = ${value};`)
-    defaultExport.push(`"${className}":${identifier}`)
+    if (loader) {
+      defaultExport.push(`get "${className}" () { useContext(LinkContext).add('${cssFilename}'); return ${value}}`)
+    } else {
+      defaultExport.push(`"${className}": ${value},`)
+    }
   }
 
-  const cssFilename = path.join('/.virtual/', filename.replace(/\.modules?\.css/, '.css'))
+  const contextAbsolutePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../server/context.mjs')
+  const contextImportPath = path.relative(path.dirname(file), contextAbsolutePath)
+
+  if (!loader) {
+    imports.push(
+      `import __styles from "${cssFilename}" assert { type: 'css' };`,
+    )
+  }
+
+  if (loader) {
+    imports.push(
+      'import { useContext } from \'preact/compat\';',
+      `import LinkContext from \'${contextImportPath}\';`,
+    )
+  }
 
   const jsContent = [
-    `import __styles from "${cssFilename}" assert { type: 'css' };`,
-    'document.adoptedStyleSheets = [...document.adoptedStyleSheets, __styles];',
     imports.join('\n'),
+    !loader ? 'document.adoptedStyleSheets = [...document.adoptedStyleSheets, __styles];' : '',
     exports.join('\n'),
-    `export default {${defaultExport.join(',')}};`,
+    `export default {${defaultExport.join('\n')}};`,
   ].join('\n')
 
   storage.set(filename, jsContent, 'application/javascript; charset=utf-8')
 
   storage.set(cssFilename, res.css, 'text/css; charset=utf-8')
 
-  storage.set(cssFilename+ '.map', res.css,  'text/sourceMap', res.map.toJSON())
+  storage.set(cssFilename+ '.map', res.map.toJSON(), 'text/sourceMap')
 }

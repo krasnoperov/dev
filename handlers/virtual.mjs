@@ -1,8 +1,7 @@
-import { contentType } from 'mime-types'
-import path from 'path'
 import { safeRelativePath } from '../utils/safeRelativePath.mjs'
 
-export function virtual( options = {} ) {
+/* Handler of express-like requests */
+export function handler( options = {} ) {
   const {
     storage
   } = options
