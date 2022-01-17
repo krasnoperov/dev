@@ -16,6 +16,8 @@ export function handler (options = {}) {
     const filename = path.join(resolveDir, safeRelativePath(req.originalUrl))
     // Just read the whole file into memory, it's ok for development
     const file = await fs.promises.readFile(filename)
+
+    console.log(filename, lookup(filename))
     res.writeHead(200, {
       'content-type': lookup(filename) || 'application/octet-stream',
       'content-length': file.length

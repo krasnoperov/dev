@@ -6,7 +6,7 @@ import nesting from 'postcss-nesting'
 import identifierfy from 'identifierfy'
 import collectClasses from './postcss/collectClasses.mjs'
 import renameClasses from './postcss/renameClasses.mjs'
-import { namer } from './namer.mjs'
+import { namer } from './utils/namer.mjs'
 import { fileURLToPath, pathToFileURL, URL } from 'url'
 import process from 'process'
 
@@ -76,7 +76,8 @@ const postcssCollectClasses = postcss([
 export async function transform (storage, filename, options) {
 
   const {
-    loader = false // generate code for ESM loader within node server
+    loader = false, // generate code for ESM loader within node server
+    bundler = false // generate code for bundle
   } = options
 
   const file = path.join(resolveDir, filename)
@@ -114,7 +115,7 @@ export async function transform (storage, filename, options) {
   const contextAbsolutePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../server/context.mjs')
   const contextImportPath = path.relative(path.dirname(file), contextAbsolutePath)
 
-  if (!loader) {
+  if (!loader && !bundler ) {
     imports.push(
       `import __styles from "${cssFilename}" assert { type: 'css' };`,
     )
@@ -129,14 +130,20 @@ export async function transform (storage, filename, options) {
 
   const jsContent = [
     imports.join('\n'),
-    !loader ? 'document.adoptedStyleSheets = [...document.adoptedStyleSheets, __styles];' : '',
+    !loader && !bundler ? 'document.adoptedStyleSheets = [...document.adoptedStyleSheets, __styles];' : '',
     exports.join('\n'),
     `export default {${defaultExport.join('\n')}};`,
   ].join('\n')
 
-  storage.set(filename, jsContent, 'application/javascript; charset=utf-8')
+  storage && storage.set(filename, jsContent, 'application/javascript; charset=utf-8')
 
-  storage.set(cssFilename, res.css, 'text/css; charset=utf-8')
+  storage && storage.set(cssFilename, res.css, 'text/css; charset=utf-8')
 
-  storage.set(cssFilename+ '.map', res.map.toJSON(), 'text/sourceMap')
+  storage && storage.set(cssFilename+ '.map', res.map.toJSON(), 'text/sourceMap')
+
+  return {
+    css: res.css,
+    map: res.map,
+    js: jsContent
+  }
 }

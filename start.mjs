@@ -7,6 +7,7 @@ import { handler as cssHandler } from './handlers/cssmodules/index.mjs'
 import { handler as fileHandler } from './handlers/file.mjs'
 import { handler as urlHandler } from './handlers/url.mjs'
 import { handler as virtualHandler } from './handlers/virtual.mjs'
+import { handler as emptyListHandler } from './handlers/emptyList.mjs'
 import { MemoryStorage } from './storages/MemoryStorage.mjs'
 import { log } from './server/log.mjs'
 import { renderPage } from './demo/server.tsx'
@@ -34,6 +35,8 @@ const app = polka({
 
 app.use(log())
 
+app.get(/.*\.tsx$/, emptyListHandler())
+
 app.get(/.*\.tsx$/, tsxHandler())
 
 app.get(/.*\.svg$/, urlHandler(), fileHandler())
@@ -48,6 +51,9 @@ app.get(/.*.map$/, fileHandler())
 
 // Serve node_modules as is
 app.get(/\/node_modules\//, fileHandler()) // String instead of regexp removes prefix from path
+
+// Serve built assets as is
+app.get(/\/build\//, fileHandler()) // String instead of regexp removes prefix from path
 
 app.use(renderPage)
 

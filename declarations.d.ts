@@ -1,4 +1,5 @@
 declare module '*.css'
 declare module '*.tsx'
+declare module '*.tsx?list-of-stylesheets'
 declare module '*.jsx'
 declare module '*.svg?url'

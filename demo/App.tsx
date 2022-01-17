@@ -2,11 +2,12 @@ import { LocationProvider, Router, Route, lazy, ErrorBoundary, hydrate } from 'p
 import NotFound from './pages/404.tsx'
 import Header from './header.tsx'
 import { VNode } from 'preact'
-import { cssimport } from './cssimport.tsx'
-// import './style.css'
+import { cssloader as css } from './cssloader.tsx'
 
-const About = lazy(() => cssimport('./pages/about/about.tsx'))
-const Home = lazy(() => cssimport('./pages/home/home.tsx'))
+import AboutStylesheets from './pages/about/about.tsx?list-of-stylesheets'
+
+const About = lazy(() => Promise.all([import('./pages/about/about.tsx'), css(AboutStylesheets)]).then(r => r[0]))
+const Home = lazy(() => import('./pages/home/home.tsx'))
 
 export function App(): VNode {
   return (

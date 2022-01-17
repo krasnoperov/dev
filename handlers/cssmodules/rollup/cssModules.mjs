@@ -1,48 +1,11 @@
-import path from 'path'
-import { transform } from './transform.mjs'
-import { fileURLToPath } from 'url'
 import pluginutils from 'rollup-pluginutils'
-import fs from 'fs'
-import crypto from 'crypto'
-import postcss from 'postcss'
 import postcssLoadConfig from 'postcss-load-config'
-import { Concat } from './utils/concat.js'
 import { SourceMapConsumer } from 'source-map'
-
-/* Handler of express-like requests */
-export function handler(options = {}) {
-  const {
-    storage
-  } = options
-
-  return async (req, res, next) => {
-    try {
-      if (req.originalUrl.endsWith('.module.css') || req.originalUrl.endsWith('.modules.css')) {
-        await transform(storage, req.originalUrl, { loader: false })
-      }
-      return next()
-    } catch (e) {
-      console.error(e)
-      next(e)
-    }
-  }
-}
-
-/* Node ES modules loader */
-export async function loader (url, options = {}) {
-  const {
-    storage,
-    resolveDir = process.cwd()
-  } = options
-
-  const filename = fileURLToPath(url).replace(resolveDir, '')
-  await transform(storage, filename, { loader: true })
-
-  return {
-    format: 'module',
-    source: (await storage.get(filename))[0],
-  }
-}
+import postcss from 'postcss'
+import { transform } from '../transform.mjs'
+import { Concat } from '../utils/concat.js'
+import crypto from 'crypto'
+import path from 'path'
 
 const defaultInclude = [
   '**/*.modules.css',
@@ -53,10 +16,11 @@ const resolveDir = process.cwd()
 
 const storage = null
 
-export const rollup = (options = {}) => {
+export const cssModules = (options = {}) => {
   const {
     ctx = {},
     filenamer,
+    STAGE_DIR = 'stage',
     STATIC_DIR = '',
     DYNAMIC_DIR = '',
     MEDIA_DIR = '',
@@ -93,14 +57,55 @@ export const rollup = (options = {}) => {
     }
   }
 
+
+  const assets = new Map()
+
   return {
-    name: 'cssmodules',
+    name: 'cssModules',
+
+    api: {
+      emittedStylesheets
+    },
 
     buildStart () {
       postcssFromConfig = postcssFromConfig || postcss(postcssrc.plugins)
     },
 
-    async load(id) {
+
+
+    async resolveId(source, importer, options) {
+      if (source.endsWith('?list-of-stylesheets')) {
+        const resolved = await this.resolve(source.replace('?list-of-stylesheets', ''), importer)
+        if (!resolved) {
+          console.log('Suffix ?list-of-stylesheets must be used with a valid entrypoint')
+        }
+
+        return resolved.id + '?list-of-stylesheets'
+      }
+
+      if (source.startsWith('build-asset-with-list-of-stylesheets:')) {
+        return { id: source, external: true }
+      }
+      return null;
+    },
+
+    async load(id, opts) {
+      if (id.endsWith('?list-of-stylesheets')) {
+        const name = id.replace('?list-of-stylesheets', '').replace(process.cwd(), '')
+        const assetId = this.emitFile({
+          type: 'asset',
+          name: name,
+          fileName: path.join('@build', name)
+        })
+
+        assets.set(id.replace('?list-of-stylesheets', ''), assetId)
+
+        return {
+          code: `import list from 'build-asset-with-list-of-stylesheets:${path.join('@build', name)}'; export default list`,
+          map: null,
+        }
+      }
+
       if (!filter(id)) return null
 
       const filename = id.replace(resolveDir, '')
@@ -184,7 +189,7 @@ export const rollup = (options = {}) => {
 
         // Some CSS parsers bail on comments in CSS, say Macaw. Thus, this. :)
         // if (sourcemap) {
-          result.css += `\n/*# sourceMappingURL=${mapFileName} */`
+        result.css += `\n/*# sourceMappingURL=${mapFileName} */`
         // }
 
         this.emitFile({
@@ -203,6 +208,11 @@ export const rollup = (options = {}) => {
 
         // console.log('built', entry)
         emittedStylesheets.set(entry, publicFileName)
+        const assetId = assets.get(chunk.facadeModuleId)
+        if (assetId) {
+          this.setAssetSource(assetId, `export default ['${publicFileName}']`)
+        }
+
         // emittedStylesheetsByName.set(name, publicFileName)
       }
 
@@ -211,4 +221,3 @@ export const rollup = (options = {}) => {
     }
   }
 }
-

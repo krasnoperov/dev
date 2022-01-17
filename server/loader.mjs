@@ -9,6 +9,8 @@ import { loader as cssLoader } from '../handlers/cssmodules/index.mjs'
 import { loader as tsxLoader } from '../handlers/tsx.mjs'
 import { loader as urlLoader } from '../handlers/url.mjs'
 import { loader as emptyLoader } from '../handlers/empty.mjs'
+import { loader as emptyListLoader } from '../handlers/emptyList.mjs'
+
 // import { BASE_PATH, loadAssets } from './loadAssets.js'
 // import sucrase from 'sucrase'
 
@@ -88,6 +90,10 @@ export async function load (url, context, defaultLoad) {
   /* Transform plain .css files to an empty objects */
   if (extname == '.css') {
     return emptyLoader(url)
+  }
+
+  if (url.endsWith('?list-of-stylesheets')) {
+    return emptyListLoader(url)
   }
 
   // Let Node.js handle all other sources.

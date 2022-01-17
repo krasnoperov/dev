@@ -3,27 +3,32 @@ import path from 'path'
 import swc from '@swc/core'
 import { safeRelativePath } from '../utils/safeRelativePath.mjs'
 import { fileURLToPath } from 'url'
+import pluginutils from 'rollup-pluginutils'
+
+const DEFAULT_OPTIONS = {
+  configFile: true,
+  jsc: {
+    parser: {
+      syntax: 'typescript',
+      tsx: true,
+      dynamicImport: true,
+    },
+    transform: {
+      react: {
+        runtime: 'automatic',
+        importSource: 'preact',
+      }
+    },
+    target: 'es2016',
+  }
+}
 
 /* Load and transform tsx files */
 async function tsx(filename, options) {
   const code = await fs.promises.readFile(filename, 'utf8')
   const output = await swc.transform(code, {
     filename: filename,
-    configFile: true,
-    jsc: {
-      parser: {
-        syntax: 'typescript',
-        tsx: true,
-        dynamicImport: true,
-      },
-      transform: {
-        react: {
-          runtime: 'automatic',
-          importSource: 'preact',
-        }
-      },
-      target: 'es2016',
-    },
+    ...DEFAULT_OPTIONS,
     ...options,
   })
   return output.code
@@ -58,3 +63,18 @@ export async function loader (url, options = {}) {
   }
 
 }
+
+const defaultInclude = [
+  '**/*.tsx',
+]
+
+const filter = pluginutils.createFilter(defaultInclude)
+
+export const rollup = (options = {}) => ({
+  name: 'tsx',
+  transform(code, filename) {
+    if (!filter(filename)) return null
+
+    return swc.transform(code, { filename, ...DEFAULT_OPTIONS, ...options})
+  }
+})
