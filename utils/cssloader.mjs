@@ -1,7 +1,9 @@
-import { useContext } from 'preact/compat'
+const isServer = typeof window === 'undefined'
 
-export async function cssloader (names, media = 'all') {
-  return Promise.all(names?.map(href =>
+export async function cssloader (assets, media = 'all') {
+  if (isServer) return
+
+  return Promise.all(assets?.map(href =>
     new Promise((onload, onerror) => {
       if (document.querySelectorAll(`link[href="${href}"]`).length) {
         onload(true)

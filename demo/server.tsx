@@ -2,8 +2,7 @@ import { LocationProvider } from 'preact-iso'
 // @ts-ignore
 import { prerender } from '../server/prerender.mjs'
 import { App } from './App.tsx'
-// @ts-ignore
-import LinkContext from '../server/context.mjs'
+import AssetsContext from '../utils/AssetsContext.js'
 // @ts-ignore
 import htmlTemplate from './index.html.mjs'
 
@@ -28,12 +27,14 @@ setLocation("https://localhost/");
 
 export async function getHtml(url) {
 
-  const links = new Set()
+  if (!AssetsContext) return
+
+  const links = new Set<string>()
 
   const html = (await prerender(
-    <LinkContext.Provider value={links}>
+    <AssetsContext.Provider value={links}>
       <LocationProvider url={url}><App/></LocationProvider>
-    </LinkContext.Provider>
+    </AssetsContext.Provider>
   ))
 
   return htmlTemplate( { html, links })

@@ -1,10 +1,9 @@
 import styles from './about.module.css'
 import Nested from './nested.tsx'
-import { lazy } from 'preact-iso'
-import { cssloader as css } from '../../cssloader.tsx'
+import { lazy } from '../../../utils/lazy.js'
 import NestedDynamicStylesheets from './nestedDynamic.tsx?list-of-stylesheets'
 
-const NestedDynamic = lazy(() => Promise.all([import('./nestedDynamic.tsx'), css(NestedDynamicStylesheets)]).then(r => r[0]))
+const NestedDynamic = lazy(() => import('./nestedDynamic.tsx'), NestedDynamicStylesheets)
 
 export default function About({query}) {
   return <section class={styles.about}>

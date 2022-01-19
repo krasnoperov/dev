@@ -19,7 +19,7 @@ const DEFAULT_OPTIONS = {
         importSource: 'preact',
       }
     },
-    target: 'es2016',
+    target: 'es2022', // Only for the strong!
   }
 }
 
@@ -42,6 +42,7 @@ export function handler (options = {}) {
 
   return async (req, res) => {
     const filename = path.join(resolveDir, safeRelativePath(req.originalUrl))
+
     const code = await tsx(filename, options)
     res.writeHead(200, { 'content-type': 'application/javascript; charset=utf-8' })
     res.end(code)
@@ -55,6 +56,7 @@ export async function loader (url, options = {}) {
   } = options
 
   const filename = fileURLToPath(url)
+
   const code = await tsx(filename, options)
 
   return {
@@ -66,6 +68,7 @@ export async function loader (url, options = {}) {
 
 const defaultInclude = [
   '**/*.tsx',
+  '**/*.ts',
 ]
 
 const filter = pluginutils.createFilter(defaultInclude)

@@ -7,7 +7,7 @@ import { handler as cssHandler } from './handlers/cssmodules/index.mjs'
 import { handler as fileHandler } from './handlers/file.mjs'
 import { handler as urlHandler } from './handlers/url.mjs'
 import { handler as virtualHandler } from './handlers/virtual.mjs'
-import { handler as emptyListHandler } from './handlers/emptyList.mjs'
+import { handler as losHandler } from './handlers/los.mjs'
 import { MemoryStorage } from './storages/MemoryStorage.mjs'
 import { log } from './server/log.mjs'
 import { renderPage } from './demo/server.tsx'
@@ -35,7 +35,8 @@ const app = polka({
 
 app.use(log())
 
-app.get(/.*\.tsx$/, emptyListHandler())
+// Handle imports of code files with ?list-of-stylesheets query parameter
+app.get(/.*\.(ts|tsx|js|jsx)$/, losHandler())
 
 app.get(/.*\.tsx$/, tsxHandler())
 
@@ -47,13 +48,15 @@ const loaderMemoryStorage = globalThis.loaderMemoryStorage // new MemoryStorage(
 // Convert single .modules.css to the couple of JS and CSS files and serve them from the filesystem
 app.get(/.*\.css$/, cssHandler({ storage: loaderMemoryStorage }), virtualHandler({ storage: loaderMemoryStorage }), fileHandler())
 
-app.get(/.*.map$/, fileHandler())
+app.get(/.*\.(mjs|js)$/, fileHandler())
+
+app.get(/.*\.map$/, fileHandler())
 
 // Serve node_modules as is
-app.get(/\/node_modules\//, fileHandler()) // String instead of regexp removes prefix from path
+app.get(/\/node_modules\//, fileHandler()) // Use regex here because polka removes string prefix from the path
 
 // Serve built assets as is
-app.get(/\/build\//, fileHandler()) // String instead of regexp removes prefix from path
+app.get(/\/build\//, fileHandler())
 
 app.use(renderPage)
 

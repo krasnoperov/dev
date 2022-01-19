@@ -27,6 +27,7 @@ export const cssModules = (options = {}) => {
     META_DIR = '',
     PUBLIC_PATH = '/',
     configPath,
+    sourcemap = true,
   } = options
 
   const filter = pluginutils.createFilter(defaultInclude)
@@ -71,34 +72,44 @@ export const cssModules = (options = {}) => {
       postcssFromConfig = postcssFromConfig || postcss(postcssrc.plugins)
     },
 
-
-
     async resolveId(source, importer, options) {
+      // Resolve the original module for which we need to get the list of stylesheets
       if (source.endsWith('?list-of-stylesheets')) {
-        const resolved = await this.resolve(source.replace('?list-of-stylesheets', ''), importer)
+        const originalSource = source.replace('?list-of-stylesheets', '')
+        const resolved = await this.resolve(originalSource, importer)
         if (!resolved) {
           console.log('Suffix ?list-of-stylesheets must be used with a valid entrypoint')
         }
 
+        // Keep suffix for a while
         return resolved.id + '?list-of-stylesheets'
       }
 
+      // Mark imports with prefix as external to prevent empty static assets from bundling on this pass of rollup
       if (source.startsWith('build-asset-with-list-of-stylesheets:')) {
         return { id: source, external: true }
       }
+
       return null;
     },
 
     async load(id, opts) {
       if (id.endsWith('?list-of-stylesheets')) {
-        const name = id.replace('?list-of-stylesheets', '').replace(process.cwd(), '')
+
+        // In a perfect world we need to provide actual list of used stylesheets, but it is unknown now.
+        // It will be generated only in generateBundle().
+        // So we emit static asset and require second pass of rollup to bundle it.
+
+        const originalModule = id.replace('?list-of-stylesheets', '')
+        const name = originalModule.replace(process.cwd(), '')
+
         const assetId = this.emitFile({
           type: 'asset',
           name: name,
           fileName: path.join('@build', name)
         })
 
-        assets.set(id.replace('?list-of-stylesheets', ''), assetId)
+        assets.set(originalModule, assetId)
 
         return {
           code: `import list from 'build-asset-with-list-of-stylesheets:${path.join('@build', name)}'; export default list`,
@@ -109,7 +120,7 @@ export const cssModules = (options = {}) => {
       if (!filter(id)) return null
 
       const filename = id.replace(resolveDir, '')
-      const res = await transform(storage, filename, { bundler: true })
+      const res = await transform(storage, filename, { mode: 'bundler' })
 
       sources[id] = res
 
@@ -121,9 +132,13 @@ export const cssModules = (options = {}) => {
     },
 
     async generateBundle (outputOptions, bundle) {
-      const hrstart = process.hrtime()
+      // const hrstart = process.hrtime()
       emittedStylesheets.clear()
 
+      // For each entrypoint
+      // - concatenate all imported stylesheets
+      // - emit .css and .css.map files
+      // - emit asset with filenames of that stylesheets
       for (const [entry, chunk] of Object.entries(bundle)) {
         const { type, modules } = chunk
 
@@ -140,13 +155,6 @@ export const cssModules = (options = {}) => {
 
         const name = bundle[entry].name
 
-        // if (!updatedFiles.some(files.has, files)) {
-        //   // Css files are not updated since the last run
-        //   // Skip build phase and reuse previous result
-        //   emittedStylesheets.set(entry, emittedStylesheetsByName.get(name))
-        //   continue
-        // }
-
         const fileName = `${name}.css`
 
         const concat = new Concat(fileName)
@@ -154,15 +162,6 @@ export const cssModules = (options = {}) => {
         // concatenated css and map
         for (const file of files.values()) {
           const result = sources[file]
-          // const result = await postcssRenameClasses
-          //   .process(source.css, {
-          //     from: file,
-          //     to: file,
-          //     map: { annotation: false, inline: false, prev: null }
-          //   })
-          //
-          // await reportPostcssWarnings.call(this, result.warnings(), source.map)
-
           await concat.add(file, result)
           await Promise.resolve()
         }
@@ -188,9 +187,9 @@ export const cssModules = (options = {}) => {
         const mapFileName = `${codeFileName}.map`
 
         // Some CSS parsers bail on comments in CSS, say Macaw. Thus, this. :)
-        // if (sourcemap) {
-        result.css += `\n/*# sourceMappingURL=${mapFileName} */`
-        // }
+        if (sourcemap) {
+          result.css += `\n/*# sourceMappingURL=${mapFileName} */`
+        }
 
         this.emitFile({
           type: 'asset',
@@ -206,17 +205,14 @@ export const cssModules = (options = {}) => {
 
         const publicFileName = path.join(PUBLIC_PATH, STATIC_DIR, codeFileName)
 
-        // console.log('built', entry)
         emittedStylesheets.set(entry, publicFileName)
         const assetId = assets.get(chunk.facadeModuleId)
         if (assetId) {
           this.setAssetSource(assetId, `export default ['${publicFileName}']`)
         }
-
-        // emittedStylesheetsByName.set(name, publicFileName)
       }
 
-      const hrend = process.hrtime(hrstart)
+      // const hrend = process.hrtime(hrstart)
       // console.log(`Styles generated in ${hrend[0]}s ${hrend[1] / 1000000 >> 0}ms`)
     }
   }

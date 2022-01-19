@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --experimental-loader=./server/loader.mjs start.mjs"
+    "build": "NODE_ENV=production npx rollup -c",
+    "dev": "NODE_ENV=development node --experimental-loader=./server/loader.mjs start.mjs",
+    "start": "NODE_ENV=production node --experimental-loader=./server/loader.mjs start.mjs"
   },
   "dependencies": {
     "@swc/core": "1.2.125",

@@ -37,6 +37,6 @@ export default ({ html, links }) =>
 </head>
 <body>
 ${html}
-<script src="/build/static/client.511a8b33.js" type="module"></script>
+<script src="/build/static/client.218248a8.js" type="module"></script>
 </body>
 </html>`

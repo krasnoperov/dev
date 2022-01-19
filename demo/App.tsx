@@ -1,13 +1,13 @@
-import { LocationProvider, Router, Route, lazy, ErrorBoundary, hydrate } from 'preact-iso'
+import { LocationProvider, Router, Route, ErrorBoundary, hydrate } from 'preact-iso'
 import NotFound from './pages/404.tsx'
 import Header from './header.tsx'
 import { VNode } from 'preact'
-import { cssloader as css } from './cssloader.tsx'
-
 import AboutStylesheets from './pages/about/about.tsx?list-of-stylesheets'
+import HomeStylesheets from './pages/home/home.tsx?list-of-stylesheets'
+import { lazy } from '../utils/lazy.js'
 
-const About = lazy(() => Promise.all([import('./pages/about/about.tsx'), css(AboutStylesheets)]).then(r => r[0]))
-const Home = lazy(() => import('./pages/home/home.tsx'))
+const About = lazy(() => import('./pages/about/about.tsx'), AboutStylesheets)
+const Home = lazy(() => import('./pages/home/home.tsx'), HomeStylesheets)
 
 export function App(): VNode {
   return (

@@ -9,7 +9,7 @@ import { loader as cssLoader } from '../handlers/cssmodules/index.mjs'
 import { loader as tsxLoader } from '../handlers/tsx.mjs'
 import { loader as urlLoader } from '../handlers/url.mjs'
 import { loader as emptyLoader } from '../handlers/empty.mjs'
-import { loader as emptyListLoader } from '../handlers/emptyList.mjs'
+import { loader as losLoader } from '../handlers/los.mjs'
 
 // import { BASE_PATH, loadAssets } from './loadAssets.js'
 // import sucrase from 'sucrase'
@@ -41,39 +41,16 @@ export async function resolve (specifier, context, defaultResolver) {
       url: ((parentURL) ? new URL(specifier, parentURL).href : new URL(specifier).href)
     }
   }
-
-  // if (!ext && !path.isAbsolute(specifier)) {
-  //   // Resolve .ts files
-  //   try {
-  //     const url = ((parentURL) ? new URL(specifier, parentURL).href : new URL(specifier).href) + '.ts'
-  //     if ((await fs.promises.stat(fileURLToPath(url))).isFile()) {
-  //       return {
-  //         url,
-  //       }
-  //     }
-  //   } catch (e) {
-  //     // Ignore ENOENT
-  //   }
-  // }
-  // else if (ext === '.css') {
-  //   let url = new URL(specifier, parentURL).href
-  //   if (parentURL.includes(GENERATED_STYLES_PATH)) {
-  //     url += '.js'
-  //   } else {
-  //     url = url.replace(BASE_PATH, GENERATED_STYLES_PATH) + '.js'
-  //   }
-  //   return { url }
-  // } else if (EXTENSIONS.has(ext)) {
-  //   // Resolve static files
-  //   return {
-  //     url: (parentURL) ? new URL(specifier, parentURL).href : new URL(specifier).href,
-  //   }
-  // }
   return defaultResolver(specifier, context, defaultResolver)
 }
 
 export async function load (url, context, defaultLoad) {
   const extname = path.extname(url)
+
+  if (extname === '.tsx?list-of-stylesheets') {
+    return losLoader(url)
+  }
+
   if (extname === '.tsx') {
     return tsxLoader(url)
   }
@@ -90,10 +67,6 @@ export async function load (url, context, defaultLoad) {
   /* Transform plain .css files to an empty objects */
   if (extname == '.css') {
     return emptyLoader(url)
-  }
-
-  if (url.endsWith('?list-of-stylesheets')) {
-    return emptyListLoader(url)
   }
 
   // Let Node.js handle all other sources.
