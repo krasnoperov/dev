@@ -1,0 +1,59 @@
+{
+  "name": "@krasnoperov/dev",
+  "version": "0.0.0",
+  "description": "Simple tmux session manager for remote development with Claude integration",
+  "type": "module",
+  "bin": {
+    "dev": "./dist/dev.js",
+    "rdev": "./dist/rdev.js"
+  },
+  "scripts": {
+    "dev": "node --import tsx src/dev.ts",
+    "build": "rollup -c && chmod +x dist/dev.js dist/rdev.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --fix"
+  },
+  "keywords": [
+    "tmux",
+    "remote-development",
+    "ssh",
+    "claude",
+    "session-manager",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "Aleksei Krasnoperov",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/krasnoperov/dev.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist/",
+    "hooks/",
+    "LICENSE",
+    "README.md"
+  ],
+  "dependencies": {
+    "@clack/prompts": "^0.10.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@rollup/plugin-commonjs": "29.0.0",
+    "@rollup/plugin-json": "6.1.0",
+    "@rollup/plugin-node-resolve": "16.0.3",
+    "@rollup/plugin-typescript": "12.3.0",
+    "@semantic-release/git": "^10.0.1",
+    "@stylistic/eslint-plugin": "5.6.1",
+    "@types/node": "24.10.1",
+    "eslint": "9.39.1",
+    "rollup": "4.53.3",
+    "semantic-release": "24.2.6",
+    "tslib": "2.8.1",
+    "tsx": "4.19.4",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.48.0"
+  }
+}

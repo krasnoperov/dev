@@ -1,0 +1,9 @@
+src/
+test/
+.github/
+.releaserc.json
+tsconfig.json
+rollup.config.js
+eslint.config.js
+*.log
+.DS_Store

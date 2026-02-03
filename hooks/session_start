@@ -1,0 +1,9 @@
+#!/bin/bash
+# Claude hook: Track which Claude session is running in which tmux session
+# Install: cp this file to ~/.claude/hooks/session_start && chmod +x ~/.claude/hooks/session_start
+
+if [ -n "$TMUX" ] && [ -n "$CLAUDE_SESSION_ID" ]; then
+  tmux_session=$(tmux display-message -p '#S')
+  mkdir -p ~/.local/share/dev-sessions
+  echo "$CLAUDE_SESSION_ID" > ~/.local/share/dev-sessions/"$tmux_session"
+fi
