@@ -59,6 +59,33 @@ When multiple sessions exist, `dev` shows a picker with Claude session summaries
 └
 ```
 
+## Storage Structure
+
+Sessions are stored using Claude-style path notation:
+
+```
+~/.local/share/dev-sessions/
+├── -home-alv-projects-subtitles/
+│   ├── index.json              # Project metadata
+│   └── sessions/
+│       ├── subtitles.json      # Session metadata
+│       └── subtitles-1430.json
+└── -home-alv-projects-api/
+    └── ...
+```
+
+**Session metadata (sessions/subtitles.json):**
+```json
+{
+  "tmuxSession": "subtitles",
+  "created": "2026-02-03T19:00:00Z",
+  "lastAttached": "2026-02-03T20:30:00Z",
+  "claudeSessionId": "abc123-...",
+  "claudeSummary": "fix auth bug",
+  "gitBranch": "main"
+}
+```
+
 ## Claude Integration
 
 To show Claude session summaries in the picker, install the hook:
@@ -68,7 +95,8 @@ cp hooks/session_start ~/.claude/hooks/
 chmod +x ~/.claude/hooks/session_start
 ```
 
-This tracks which Claude session is running in which tmux session.
+This updates session metadata with the Claude session ID when Claude starts.
+Requires `jq` for reliable JSON updates: `sudo apt install jq`
 
 ## Workflow Example
 
