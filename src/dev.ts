@@ -1,23 +1,104 @@
 import * as p from '@clack/prompts'
 import { execSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { homedir } from 'node:os'
 
 const cwd = process.cwd()
 const dirName = basename(cwd).replace(/\./g, '-')
 const home = homedir()
-const sessionsDb = join(home, '.local/share/dev-sessions')
+const devSessionsRoot = join(home, '.local/share/dev-sessions')
 const claudeProjects = join(home, '.claude/projects')
 
-interface SessionEntry {
+// Convert path to Claude-style notation: /home/alv/projects/foo → -home-alv-projects-foo
+function pathToKey(path: string): string {
+  return path.replace(/\//g, '-')
+}
+
+function getProjectDir(): string {
+  return join(devSessionsRoot, pathToKey(cwd))
+}
+
+function getSessionsDir(): string {
+  return join(getProjectDir(), 'sessions')
+}
+
+interface ProjectIndex {
+  path: string
+  created: string
+}
+
+interface SessionMeta {
+  tmuxSession: string
+  created: string
+  lastAttached: string
+  claudeSessionId?: string
+  claudeSummary?: string
+  gitBranch?: string
+}
+
+interface ClaudeSessionEntry {
   sessionId: string
   summary?: string
   gitBranch?: string
 }
 
-interface SessionsIndex {
-  entries: SessionEntry[]
+interface ClaudeSessionsIndex {
+  entries: ClaudeSessionEntry[]
+}
+
+function ensureProjectIndex(): void {
+  const projectDir = getProjectDir()
+  const indexPath = join(projectDir, 'index.json')
+
+  mkdirSync(getSessionsDir(), { recursive: true })
+
+  if (!existsSync(indexPath)) {
+    const index: ProjectIndex = {
+      path: cwd,
+      created: new Date().toISOString(),
+    }
+    writeFileSync(indexPath, JSON.stringify(index, null, 2))
+  }
+}
+
+function getSessionMeta(tmuxSession: string): SessionMeta | null {
+  const metaPath = join(getSessionsDir(), `${tmuxSession}.json`)
+  if (!existsSync(metaPath)) return null
+  try {
+    return JSON.parse(readFileSync(metaPath, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+function saveSessionMeta(meta: SessionMeta): void {
+  const metaPath = join(getSessionsDir(), `${meta.tmuxSession}.json`)
+  writeFileSync(metaPath, JSON.stringify(meta, null, 2))
+}
+
+function updateLastAttached(tmuxSession: string): void {
+  const meta = getSessionMeta(tmuxSession)
+  if (meta) {
+    meta.lastAttached = new Date().toISOString()
+    saveSessionMeta(meta)
+  }
+}
+
+function getClaudeInfo(claudeSessionId: string): { summary?: string; gitBranch?: string } | null {
+  const claudeProjectPath = join(claudeProjects, pathToKey(cwd), 'sessions-index.json')
+  if (!existsSync(claudeProjectPath)) return null
+
+  try {
+    const index: ClaudeSessionsIndex = JSON.parse(readFileSync(claudeProjectPath, 'utf8'))
+    const entry = index.entries.find(e => e.sessionId === claudeSessionId)
+    if (entry) {
+      return { summary: entry.summary, gitBranch: entry.gitBranch }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return null
 }
 
 function getTmuxSessions(): string[] {
@@ -32,31 +113,57 @@ function getTmuxSessions(): string[] {
   }
 }
 
-function getClaudeSummary(tmuxSession: string): string | null {
-  const idFile = join(sessionsDb, tmuxSession)
-  if (!existsSync(idFile)) return null
+function getStoredSessions(): string[] {
+  const sessionsDir = getSessionsDir()
+  if (!existsSync(sessionsDir)) return []
 
-  const claudeId = readFileSync(idFile, 'utf8').trim()
-  const projectPath = cwd.replace(/\//g, '-')
-  const indexFile = join(claudeProjects, projectPath, 'sessions-index.json')
+  return readdirSync(sessionsDir)
+    .filter(f => f.endsWith('.json'))
+    .map(f => f.replace('.json', ''))
+}
 
-  if (!existsSync(indexFile)) return null
+function getSessionDisplay(tmuxSession: string): string {
+  const meta = getSessionMeta(tmuxSession)
+  if (!meta) return tmuxSession
 
-  try {
-    const index: SessionsIndex = JSON.parse(readFileSync(indexFile, 'utf8'))
-    const entry = index.entries.find(e => e.sessionId === claudeId)
-    if (entry) {
-      const summary = entry.summary?.slice(0, 40) || ''
-      const branch = entry.gitBranch || ''
-      return branch ? `${summary} [${branch}]` : summary
+  // Try to get fresh Claude info if we have a session ID
+  if (meta.claudeSessionId) {
+    const claudeInfo = getClaudeInfo(meta.claudeSessionId)
+    if (claudeInfo) {
+      meta.claudeSummary = claudeInfo.summary
+      meta.gitBranch = claudeInfo.gitBranch
+      saveSessionMeta(meta)
     }
-  } catch {
-    // Ignore parse errors
   }
-  return null
+
+  const parts: string[] = []
+  if (meta.claudeSummary) {
+    const summary = meta.claudeSummary.length > 35
+      ? meta.claudeSummary.slice(0, 35) + '...'
+      : meta.claudeSummary
+    parts.push(summary)
+  }
+  if (meta.gitBranch) {
+    parts.push(`[${meta.gitBranch}]`)
+  }
+
+  return parts.length > 0 ? `${tmuxSession} (${parts.join(' ')})` : tmuxSession
+}
+
+function formatTimeAgo(isoDate: string): string {
+  const diff = Date.now() - new Date(isoDate).getTime()
+  const mins = Math.floor(diff / 60000)
+  const hours = Math.floor(mins / 60)
+  const days = Math.floor(hours / 24)
+
+  if (days > 0) return `${days}d ago`
+  if (hours > 0) return `${hours}h ago`
+  if (mins > 0) return `${mins}m ago`
+  return 'just now'
 }
 
 function attachTmux(session: string): void {
+  updateLastAttached(session)
   const child = spawn('tmux', ['attach', '-t', session], {
     stdio: 'inherit',
   })
@@ -64,6 +171,15 @@ function attachTmux(session: string): void {
 }
 
 function newTmux(session: string): void {
+  ensureProjectIndex()
+
+  const meta: SessionMeta = {
+    tmuxSession: session,
+    created: new Date().toISOString(),
+    lastAttached: new Date().toISOString(),
+  }
+  saveSessionMeta(meta)
+
   const child = spawn('tmux', ['new-session', '-s', session], {
     stdio: 'inherit',
   })
@@ -71,19 +187,33 @@ function newTmux(session: string): void {
 }
 
 function listSessions(): void {
-  const sessions = getTmuxSessions()
-  if (sessions.length === 0) {
-    console.log(`No sessions for ${dirName}`)
+  ensureProjectIndex()
+  const tmuxSessions = getTmuxSessions()
+  const storedSessions = getStoredSessions()
+
+  // Combine active and stored sessions
+  const allSessions = [...new Set([...tmuxSessions, ...storedSessions])]
+
+  if (allSessions.length === 0) {
+    console.log(`No sessions for ${cwd}`)
     return
   }
-  console.log(`Sessions in ${dirName}:`)
-  for (const session of sessions) {
-    const summary = getClaudeSummary(session)
-    if (summary) {
-      console.log(`  ${session} (${summary})`)
-    } else {
-      console.log(`  ${session}`)
+
+  console.log(`Sessions in ${cwd}:`)
+  for (const session of allSessions) {
+    const meta = getSessionMeta(session)
+    const isActive = tmuxSessions.includes(session)
+    const status = isActive ? '\x1b[32m●\x1b[0m' : '\x1b[90m○\x1b[0m'
+
+    let display = `  ${status} ${session}`
+    if (meta) {
+      const parts: string[] = []
+      if (meta.claudeSummary) parts.push(meta.claudeSummary.slice(0, 30))
+      if (meta.gitBranch) parts.push(`[${meta.gitBranch}]`)
+      if (meta.lastAttached) parts.push(formatTimeAgo(meta.lastAttached))
+      if (parts.length > 0) display += ` (${parts.join(' ')})`
     }
+    console.log(display)
   }
 }
 
@@ -119,7 +249,7 @@ async function main(): Promise<void> {
 
   const forceNew = args.includes('-n') || args.includes('--new')
 
-  mkdirSync(sessionsDb, { recursive: true })
+  ensureProjectIndex()
 
   const sessions = getTmuxSessions()
 
@@ -145,11 +275,18 @@ async function main(): Promise<void> {
   // Multiple → show picker
   p.intro(`dev - ${dirName}`)
 
-  const options = sessions.map(s => ({
-    value: s,
-    label: s,
-    hint: getClaudeSummary(s) || undefined,
-  }))
+  const options = sessions.map(s => {
+    const meta = getSessionMeta(s)
+    let hint: string | undefined
+    if (meta) {
+      const parts: string[] = []
+      if (meta.claudeSummary) parts.push(meta.claudeSummary.slice(0, 30))
+      if (meta.gitBranch) parts.push(`[${meta.gitBranch}]`)
+      if (meta.lastAttached) parts.push(formatTimeAgo(meta.lastAttached))
+      if (parts.length > 0) hint = parts.join(' ')
+    }
+    return { value: s, label: s, hint }
+  })
   options.push({ value: '__new__', label: 'New session', hint: undefined })
 
   const selected = await p.select({
