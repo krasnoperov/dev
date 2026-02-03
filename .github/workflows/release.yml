@@ -34,15 +34,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Update npm
-        run: npm install -g npm@latest
-
       - name: Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npx semantic-release
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
