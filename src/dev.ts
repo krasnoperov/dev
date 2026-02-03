@@ -1,6 +1,6 @@
 import * as p from '@clack/prompts'
 import { execSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, chmodSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, chmodSync, unlinkSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -10,6 +10,7 @@ const home = homedir()
 const devSessionsRoot = join(home, '.local/share/dev-sessions')
 const claudeProjects = join(home, '.claude/projects')
 const claudeHooksDir = join(home, '.claude/hooks')
+const hookPath = join(claudeHooksDir, 'session_start')
 
 // Convert path to Claude-style notation: /home/alv/projects/foo → -home-alv-projects-foo
 function pathToKey(path: string): string {
@@ -201,14 +202,29 @@ function listSessions(): void {
   }
 }
 
-function killSession(name: string): void {
-  try {
-    execSync(`tmux kill-session -t ${name}`, { encoding: 'utf8' })
-    console.log(`Killed session: ${name}`)
-  } catch {
-    console.error(`Failed to kill session: ${name}`)
-    process.exit(1)
+// Clean up orphaned session metadata (sessions that no longer exist in tmux)
+function cleanSessions(): void {
+  const sessionsDir = getSessionsDir()
+  if (!existsSync(sessionsDir)) {
+    console.log('No session metadata found.')
+    return
   }
+
+  const tmuxSessions = getTmuxSessions()
+  const storedSessions = getStoredSessions()
+  const orphaned = storedSessions.filter(s => !tmuxSessions.includes(s))
+
+  if (orphaned.length === 0) {
+    console.log('No orphaned sessions to clean.')
+    return
+  }
+
+  for (const session of orphaned) {
+    const metaPath = join(sessionsDir, `${session}.json`)
+    unlinkSync(metaPath)
+    console.log(`Removed: ${session}`)
+  }
+  console.log(`Cleaned ${orphaned.length} orphaned session(s).`)
 }
 
 // Handle Claude hook: update session metadata with Claude session ID
@@ -235,14 +251,13 @@ function handleHook(): void {
 }
 
 // Install Claude hook
-function setup(): void {
+function init(): void {
   mkdirSync(claudeHooksDir, { recursive: true })
 
-  const hookPath = join(claudeHooksDir, 'session_start')
   const hookContent = `#!/bin/bash
 # Installed by @krasnoperov/dev
 # Updates dev session metadata with Claude session ID
-dev hook
+dev hook session_start
 `
 
   writeFileSync(hookPath, hookContent)
@@ -252,61 +267,77 @@ dev hook
   console.log('Claude sessions will now be tracked in dev session metadata.')
 }
 
+// Remove Claude hook
+function deinit(): void {
+  if (!existsSync(hookPath)) {
+    console.log('No hook installed.')
+    return
+  }
+
+  unlinkSync(hookPath)
+  console.log(`Removed Claude hook from ${hookPath}`)
+}
+
 function showHelp(): void {
   console.log(`dev - tmux session manager
 
 Usage:
-  dev                  Attach/pick/create session for current directory
-  dev -n, --new        Force create new session
-  dev -l, --list       List sessions for current directory
-  dev -k, --kill NAME  Kill session
-  dev setup            Install Claude hook
-  dev hook             (internal) Handle Claude hook event
-  dev -h, --help       Show this help
+  dev                      Attach/pick/create session for current directory
+  dev ls                   List sessions for current directory
+  dev new                  Force create new session
+  dev clean                Remove metadata for dead tmux sessions
+  dev init                 Install Claude hook
+  dev deinit               Remove Claude hook
+  dev hook session_start   (internal) Handle Claude hook event
+  dev -h, --help           Show this help
+
+Closing sessions:
+  Use 'exit' or Ctrl+D in tmux, or 'tmux kill-session -t NAME'
 
 Examples:
-  cd ~/projects/myapp && dev       # Start working
-  dev -n                           # New parallel session
-  dev -l                           # See all sessions
+  cd ~/projects/myapp && dev   # Start working
+  dev new                      # New parallel session
+  dev ls                       # See all sessions
+  dev clean                    # Remove stale metadata
 `)
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
+  const cmd = args[0]
 
   // Handle subcommands
-  if (args[0] === 'hook') {
+  if (cmd === 'hook' && args[1] === 'session_start') {
     handleHook()
     return
   }
 
-  if (args[0] === 'setup') {
-    setup()
+  if (cmd === 'init') {
+    init()
     return
   }
 
-  if (args.includes('-h') || args.includes('--help')) {
-    showHelp()
+  if (cmd === 'deinit') {
+    deinit()
     return
   }
 
-  if (args.includes('-l') || args.includes('--list')) {
+  if (cmd === 'ls') {
     listSessions()
     return
   }
 
-  if (args.includes('-k') || args.includes('--kill')) {
-    const idx = args.indexOf('-k') !== -1 ? args.indexOf('-k') : args.indexOf('--kill')
-    const name = args[idx + 1]
-    if (!name) {
-      console.error('Usage: dev -k <session-name>')
-      process.exit(1)
-    }
-    killSession(name)
+  if (cmd === 'clean') {
+    cleanSessions()
     return
   }
 
-  const forceNew = args.includes('-n') || args.includes('--new')
+  if (args.includes('-h') || args.includes('--help') || cmd === 'help') {
+    showHelp()
+    return
+  }
+
+  const forceNew = cmd === 'new'
 
   ensureProjectIndex()
 

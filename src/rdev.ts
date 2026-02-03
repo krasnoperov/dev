@@ -43,7 +43,7 @@ function main(): void {
   }
 
   if (project) {
-    const devArgs = forceNew ? ' -n' : ''
+    const devArgs = forceNew ? ' new' : ''
     const command = `mkdir -p ~/projects/${project} && cd ~/projects/${project} && exec dev${devArgs}`
     ssh(host, command)
   } else {

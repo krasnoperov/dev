@@ -23,10 +23,12 @@ rdev h1                # Plain SSH
 ```bash
 cd ~/projects/myproject
 dev                    # Attach/pick/create session
-dev -n                 # Force new session
-dev -l                 # List sessions
-dev -k <name>          # Kill session
+dev new                # Force new session
+dev ls                 # List sessions
+dev clean              # Remove metadata for dead sessions
 ```
+
+To close a session, use `exit` or Ctrl+D in tmux, or `tmux kill-session -t NAME`.
 
 ## How It Works
 
@@ -91,7 +93,8 @@ Sessions are stored using Claude-style path notation:
 To show Claude session summaries in the picker, install the hook:
 
 ```bash
-dev setup
+dev init      # Install Claude hook
+dev deinit    # Remove hook (optional)
 ```
 
 This installs a Claude hook at `~/.claude/hooks/session_start` that updates
