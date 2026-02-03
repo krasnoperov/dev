@@ -91,12 +91,11 @@ Sessions are stored using Claude-style path notation:
 To show Claude session summaries in the picker, install the hook:
 
 ```bash
-cp hooks/session_start ~/.claude/hooks/
-chmod +x ~/.claude/hooks/session_start
+dev setup
 ```
 
-This updates session metadata with the Claude session ID when Claude starts.
-Requires `jq` for reliable JSON updates: `sudo apt install jq`
+This installs a Claude hook at `~/.claude/hooks/session_start` that updates
+session metadata with the Claude session ID when Claude starts.
 
 ## Workflow Example
 

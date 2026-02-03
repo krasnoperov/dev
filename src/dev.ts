@@ -1,6 +1,6 @@
 import * as p from '@clack/prompts'
 import { execSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, chmodSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -9,18 +9,19 @@ const dirName = basename(cwd).replace(/\./g, '-')
 const home = homedir()
 const devSessionsRoot = join(home, '.local/share/dev-sessions')
 const claudeProjects = join(home, '.claude/projects')
+const claudeHooksDir = join(home, '.claude/hooks')
 
 // Convert path to Claude-style notation: /home/alv/projects/foo → -home-alv-projects-foo
 function pathToKey(path: string): string {
   return path.replace(/\//g, '-')
 }
 
-function getProjectDir(): string {
-  return join(devSessionsRoot, pathToKey(cwd))
+function getProjectDir(path: string = cwd): string {
+  return join(devSessionsRoot, pathToKey(path))
 }
 
-function getSessionsDir(): string {
-  return join(getProjectDir(), 'sessions')
+function getSessionsDir(path: string = cwd): string {
+  return join(getProjectDir(path), 'sessions')
 }
 
 interface ProjectIndex {
@@ -62,8 +63,8 @@ function ensureProjectIndex(): void {
   }
 }
 
-function getSessionMeta(tmuxSession: string): SessionMeta | null {
-  const metaPath = join(getSessionsDir(), `${tmuxSession}.json`)
+function getSessionMeta(tmuxSession: string, path: string = cwd): SessionMeta | null {
+  const metaPath = join(getSessionsDir(path), `${tmuxSession}.json`)
   if (!existsSync(metaPath)) return null
   try {
     return JSON.parse(readFileSync(metaPath, 'utf8'))
@@ -72,8 +73,10 @@ function getSessionMeta(tmuxSession: string): SessionMeta | null {
   }
 }
 
-function saveSessionMeta(meta: SessionMeta): void {
-  const metaPath = join(getSessionsDir(), `${meta.tmuxSession}.json`)
+function saveSessionMeta(meta: SessionMeta, path: string = cwd): void {
+  const sessionsDir = getSessionsDir(path)
+  mkdirSync(sessionsDir, { recursive: true })
+  const metaPath = join(sessionsDir, `${meta.tmuxSession}.json`)
   writeFileSync(metaPath, JSON.stringify(meta, null, 2))
 }
 
@@ -113,6 +116,15 @@ function getTmuxSessions(): string[] {
   }
 }
 
+function getTmuxSessionName(): string | null {
+  if (!process.env.TMUX) return null
+  try {
+    return execSync('tmux display-message -p "#S"', { encoding: 'utf8' }).trim()
+  } catch {
+    return null
+  }
+}
+
 function getStoredSessions(): string[] {
   const sessionsDir = getSessionsDir()
   if (!existsSync(sessionsDir)) return []
@@ -120,34 +132,6 @@ function getStoredSessions(): string[] {
   return readdirSync(sessionsDir)
     .filter(f => f.endsWith('.json'))
     .map(f => f.replace('.json', ''))
-}
-
-function getSessionDisplay(tmuxSession: string): string {
-  const meta = getSessionMeta(tmuxSession)
-  if (!meta) return tmuxSession
-
-  // Try to get fresh Claude info if we have a session ID
-  if (meta.claudeSessionId) {
-    const claudeInfo = getClaudeInfo(meta.claudeSessionId)
-    if (claudeInfo) {
-      meta.claudeSummary = claudeInfo.summary
-      meta.gitBranch = claudeInfo.gitBranch
-      saveSessionMeta(meta)
-    }
-  }
-
-  const parts: string[] = []
-  if (meta.claudeSummary) {
-    const summary = meta.claudeSummary.length > 35
-      ? meta.claudeSummary.slice(0, 35) + '...'
-      : meta.claudeSummary
-    parts.push(summary)
-  }
-  if (meta.gitBranch) {
-    parts.push(`[${meta.gitBranch}]`)
-  }
-
-  return parts.length > 0 ? `${tmuxSession} (${parts.join(' ')})` : tmuxSession
 }
 
 function formatTimeAgo(isoDate: string): string {
@@ -227,10 +211,85 @@ function killSession(name: string): void {
   }
 }
 
+// Handle Claude hook: update session metadata with Claude session ID
+function handleHook(): void {
+  const claudeSessionId = process.env.CLAUDE_SESSION_ID
+  const tmuxSession = getTmuxSessionName()
+
+  if (!claudeSessionId || !tmuxSession) {
+    // Not in tmux or no Claude session ID - silently exit
+    return
+  }
+
+  const meta = getSessionMeta(tmuxSession)
+  if (meta) {
+    meta.claudeSessionId = claudeSessionId
+    // Also try to get fresh summary/branch from Claude's index
+    const claudeInfo = getClaudeInfo(claudeSessionId)
+    if (claudeInfo) {
+      meta.claudeSummary = claudeInfo.summary
+      meta.gitBranch = claudeInfo.gitBranch
+    }
+    saveSessionMeta(meta)
+  }
+}
+
+// Install Claude hook
+function setup(): void {
+  mkdirSync(claudeHooksDir, { recursive: true })
+
+  const hookPath = join(claudeHooksDir, 'session_start')
+  const hookContent = `#!/bin/bash
+# Installed by @krasnoperov/dev
+# Updates dev session metadata with Claude session ID
+dev hook
+`
+
+  writeFileSync(hookPath, hookContent)
+  chmodSync(hookPath, 0o755)
+
+  console.log(`Installed Claude hook at ${hookPath}`)
+  console.log('Claude sessions will now be tracked in dev session metadata.')
+}
+
+function showHelp(): void {
+  console.log(`dev - tmux session manager
+
+Usage:
+  dev                  Attach/pick/create session for current directory
+  dev -n, --new        Force create new session
+  dev -l, --list       List sessions for current directory
+  dev -k, --kill NAME  Kill session
+  dev setup            Install Claude hook
+  dev hook             (internal) Handle Claude hook event
+  dev -h, --help       Show this help
+
+Examples:
+  cd ~/projects/myapp && dev       # Start working
+  dev -n                           # New parallel session
+  dev -l                           # See all sessions
+`)
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
 
-  // Handle flags
+  // Handle subcommands
+  if (args[0] === 'hook') {
+    handleHook()
+    return
+  }
+
+  if (args[0] === 'setup') {
+    setup()
+    return
+  }
+
+  if (args.includes('-h') || args.includes('--help')) {
+    showHelp()
+    return
+  }
+
   if (args.includes('-l') || args.includes('--list')) {
     listSessions()
     return
