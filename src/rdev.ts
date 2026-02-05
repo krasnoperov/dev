@@ -1,5 +1,18 @@
 import { spawn } from 'node:child_process'
 
+function validateProjectName(project: string): string | null {
+  if (!project || project.length > 255) {
+    return 'Project name is empty or too long'
+  }
+  if (!/^[a-zA-Z0-9._-]+$/.test(project)) {
+    return 'Project name can only contain letters, numbers, dots, hyphens, underscores'
+  }
+  if (project.startsWith('.') || project.startsWith('-')) {
+    return 'Project name cannot start with dot or hyphen'
+  }
+  return null
+}
+
 function usage(): void {
   console.log(`Usage: rdev <host> [project] [options]
 
@@ -43,6 +56,11 @@ function main(): void {
   }
 
   if (project) {
+    const error = validateProjectName(project)
+    if (error) {
+      console.error(`Invalid project name: ${error}`)
+      process.exit(1)
+    }
     const devArgs = forceNew ? ' new' : ''
     const command = `mkdir -p ~/projects/${project} && cd ~/projects/${project} && exec dev${devArgs}`
     ssh(host, command)

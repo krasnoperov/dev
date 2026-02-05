@@ -1,6 +1,6 @@
 import * as p from '@clack/prompts'
 import { execSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, chmodSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, chmodSync, unlinkSync, appendFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -13,8 +13,18 @@ const claudeHooksDir = join(home, '.claude/hooks')
 const hookPath = join(claudeHooksDir, 'session_start')
 
 // Convert path to Claude-style notation: /home/alv/projects/foo → -home-alv-projects-foo
+// Dots are escaped as double-dashes to avoid collision (.claude vs claude)
 function pathToKey(path: string): string {
-  return path.replace(/\//g, '-')
+  return '-' + path.replace(/\//g, '-').replace(/\./g, '--')
+}
+
+function debugLog(msg: string): void {
+  if (process.env.DEV_DEBUG) {
+    const logPath = join(devSessionsRoot, 'debug.log')
+    const timestamp = new Date().toISOString()
+    mkdirSync(devSessionsRoot, { recursive: true })
+    appendFileSync(logPath, `${timestamp} ${msg}\n`)
+  }
 }
 
 function getProjectDir(path: string = cwd): string {
@@ -233,21 +243,25 @@ function handleHook(): void {
   const tmuxSession = getTmuxSessionName()
 
   if (!claudeSessionId || !tmuxSession) {
-    // Not in tmux or no Claude session ID - silently exit
+    debugLog(`hook: skipped (claudeSessionId=${claudeSessionId}, tmux=${tmuxSession})`)
     return
   }
 
   const meta = getSessionMeta(tmuxSession)
-  if (meta) {
-    meta.claudeSessionId = claudeSessionId
-    // Also try to get fresh summary/branch from Claude's index
-    const claudeInfo = getClaudeInfo(claudeSessionId)
-    if (claudeInfo) {
-      meta.claudeSummary = claudeInfo.summary
-      meta.gitBranch = claudeInfo.gitBranch
-    }
-    saveSessionMeta(meta)
+  if (!meta) {
+    debugLog(`hook: no meta found for tmux session ${tmuxSession}`)
+    return
   }
+
+  debugLog(`hook: updating session ${tmuxSession} with Claude ${claudeSessionId}`)
+  meta.claudeSessionId = claudeSessionId
+  // Also try to get fresh summary/branch from Claude's index
+  const claudeInfo = getClaudeInfo(claudeSessionId)
+  if (claudeInfo) {
+    meta.claudeSummary = claudeInfo.summary
+    meta.gitBranch = claudeInfo.gitBranch
+  }
+  saveSessionMeta(meta)
 }
 
 // Install Claude hook

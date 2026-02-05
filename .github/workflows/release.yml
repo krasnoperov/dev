@@ -40,6 +40,6 @@ jobs:
         run: npx semantic-release
 
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Uses OIDC trusted publishing - no NPM_TOKEN needed
+        # Configure at: https://www.npmjs.com/package/@krasnoperov/dev/access
         run: npm publish --provenance --access public
