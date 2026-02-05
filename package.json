@@ -1,6 +1,6 @@
 {
   "name": "@krasnoperov/dev",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Simple tmux session manager for remote development with Claude integration",
   "type": "module",
   "bin": {
