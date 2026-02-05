@@ -4,8 +4,8 @@
   "description": "Simple tmux session manager for remote development with Claude integration",
   "type": "module",
   "bin": {
-    "dev": "./dist/dev.js",
-    "rdev": "./dist/rdev.js"
+    "dev": "dist/dev.js",
+    "rdev": "dist/rdev.js"
   },
   "scripts": {
     "dev": "node --import tsx src/dev.ts",
@@ -25,7 +25,7 @@
   "author": "Aleksei Krasnoperov",
   "repository": {
     "type": "git",
-    "url": "https://github.com/krasnoperov/dev.git"
+    "url": "git+https://github.com/krasnoperov/dev.git"
   },
   "publishConfig": {
     "access": "public"
