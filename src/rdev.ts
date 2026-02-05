@@ -62,7 +62,7 @@ function main(): void {
       process.exit(1)
     }
     const devArgs = forceNew ? ' new' : ''
-    const command = `mkdir -p ~/projects/${project} && cd ~/projects/${project} && exec dev${devArgs}`
+    const command = `source ~/.nvm/nvm.sh 2>/dev/null; mkdir -p ~/projects/${project} && cd ~/projects/${project} && exec dev${devArgs}`
     ssh(host, command)
   } else {
     // Plain SSH
